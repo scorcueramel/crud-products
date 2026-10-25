@@ -19,16 +19,35 @@ class ProductController extends Controller
     #[Authorize('viewAny', Product::class)]
     public function index(Request $request): Response
     {
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $search = trim($validated['search'] ?? '');
+
         return Inertia::render('products/index', [
             'products' => Product::query()
+                ->when($search !== '', function ($query) use ($search) {
+                    $query->where('name', 'ilike', "%{$search}%")
+                        ->orWhere('sku', 'ilike', "%{$search}%");
+                })
                 ->orderByDesc('id')
                 ->paginate(10)
                 ->withQueryString(),
+
+            'filters' => [
+                'search' => $search
+            ],
+
 
             'permissions' => [
                 'create' => $request->user()->can('create', Product::class),
                 'update' => $request->user()->can('products.update'),
                 'delete' => $request->user()->can('products.delete'),
+            ],
+
+            'flash' => [
+                'success' => $request->session()->get('success'),
             ]
         ]);
     }
@@ -84,7 +103,7 @@ class ProductController extends Controller
     /**
      * Remove the specified resource from storage.
      */
-    #[Authorize('delete','product')]
+    #[Authorize('delete', 'product')]
     public function destroy(Product $product): RedirectResponse
     {
         return to_route('products.index')->with('success', 'Producto eliminado correctamente');
