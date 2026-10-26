@@ -74,7 +74,7 @@ export default function ProductForm({ product }: Props) {
                     </p>
                 )}
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 mb-3">
                 <div className="space-y-2">
                   <Label htmlFor="price">Precio</Label>
                   <Input
@@ -109,16 +109,17 @@ export default function ProductForm({ product }: Props) {
                 </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 mb-3">
                 <Checkbox
                     id="is_active"
                     checked={data.is_active}
                     onCheckedChange={(value) =>
                         setData("is_active", value === true)
                     }
+                    className="cursor-pointer"
                 />
 
-                <Label htmlFor="is_active">Producto activo</Label>
+                <Label htmlFor="is_active" className="cursor-pointer">Producto activo</Label>
             </div>
 
             {errors.is_active && (
@@ -128,7 +129,7 @@ export default function ProductForm({ product }: Props) {
             )}
 
             <div className="flex gap-3">
-                <Button type="submit" disabled={processing}>
+                <Button type="submit" disabled={processing} className="cursor-pointer">
                     {processing
                         ? "Guardando..."
                         : product

@@ -1,23 +1,25 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
-import type { FormEvent } from 'react';
+import { Head, Link, router } from "@inertiajs/react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import AppLayout from '@/layouts/app-layout';
-
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-    create,
-    destroy,
-    edit,
-    index,
-} from '@/routes/products';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+
+import { create, destroy, edit, index } from "@/routes/products";
 
 import type {
     PaginatedProducts,
     Product,
     ProductPermissions,
-} from '@/types/product';
+} from "@/types/product";
 
 interface Props {
     products: PaginatedProducts;
@@ -37,6 +39,12 @@ export default function ProductsIndex({
     flash,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
+    //objeto a eleiminar
+    const [productToDelete, setProductToDelete] = useState<Product | null>(
+        null,
+    );
+    //validación para eliminacion
+    const [deleting, setDeleting] = useState(false);
 
     function submitSearch(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -51,37 +59,33 @@ export default function ProductsIndex({
         );
     }
 
-    function remove(product: Product) {
-        if (!window.confirm(
-            `¿Eliminar el producto "${product.name}"?`
-        )) {
-            return;
-        }
+    function confirmDelete() {
+        if (!productToDelete || deleting) return;
 
-        router.delete(destroy(product.id).url, {
+        setDeleting(true);
+
+        router.delete(destroy(productToDelete.id).url, {
             preserveScroll: true,
+            onSuccess: () => {
+                setProductToDelete(null);
+            },
+            onFinish: () => {
+                setDeleting(false);
+            },
         });
     }
 
     return (
-        <AppLayout
-            breadcrumbs={[
-                { title: 'Productos', href: index().url },
-            ]}
-        >
+        <>
             <Head title="Productos" />
 
             <div className="space-y-6 p-6">
                 <div className="flex items-center justify-between gap-4">
-                    <h1 className="text-2xl font-bold">
-                        Productos
-                    </h1>
+                    <h1 className="text-2xl font-bold">Productos</h1>
 
                     {permissions.create && (
                         <Button asChild>
-                            <Link href={create().url}>
-                                Nuevo producto
-                            </Link>
+                            <Link href={create().url}>Nuevo producto</Link>
                         </Button>
                     )}
                 </div>
@@ -95,22 +99,15 @@ export default function ProductsIndex({
                     </div>
                 )}
 
-                <form
-                    onSubmit={submitSearch}
-                    className="flex max-w-lg gap-2"
-                >
+                <form onSubmit={submitSearch} className="flex max-w-lg gap-2">
                     <Input
                         placeholder="Buscar nombre o SKU..."
                         value={search}
-                        onChange={(e) =>
-                            setSearch(e.target.value)
-                        }
+                        onChange={(e) => setSearch(e.target.value)}
                         maxLength={100}
                     />
 
-                    <Button type="submit">
-                        Buscar
-                    </Button>
+                    <Button type="submit">Buscar</Button>
                 </form>
 
                 <div className="overflow-x-auto rounded-md border">
@@ -128,30 +125,19 @@ export default function ProductsIndex({
 
                         <tbody>
                             {products.data.map((product) => (
-                                <tr
-                                    key={product.id}
-                                    className="border-b"
-                                >
-                                    <td className="p-3">
-                                        {product.name}
-                                    </td>
+                                <tr key={product.id} className="border-b">
+                                    <td className="p-3">{product.name}</td>
 
-                                    <td className="p-3">
-                                        {product.sku}
-                                    </td>
+                                    <td className="p-3">{product.sku}</td>
 
-                                    <td className="p-3">
-                                        {product.price}
-                                    </td>
+                                    <td className="p-3">{product.price}</td>
 
-                                    <td className="p-3">
-                                        {product.stock}
-                                    </td>
+                                    <td className="p-3">{product.stock}</td>
 
                                     <td className="p-3">
                                         {product.is_active
-                                            ? 'Activo'
-                                            : 'Inactivo'}
+                                            ? "Activo"
+                                            : "Inactivo"}
                                     </td>
 
                                     <td className="space-x-2 p-3">
@@ -174,8 +160,9 @@ export default function ProductsIndex({
                                                 size="sm"
                                                 variant="destructive"
                                                 onClick={() =>
-                                                    remove(product)
+                                                    setProductToDelete(product)
                                                 }
+                                                className="cursor-pointer"
                                             >
                                                 Eliminar
                                             </Button>
@@ -186,10 +173,7 @@ export default function ProductsIndex({
 
                             {products.data.length === 0 && (
                                 <tr>
-                                    <td
-                                        colSpan={6}
-                                        className="p-6 text-center"
-                                    >
+                                    <td colSpan={6} className="p-6 text-center">
                                         No se encontraron productos.
                                     </td>
                                 </tr>
@@ -200,8 +184,7 @@ export default function ProductsIndex({
 
                 <div className="flex items-center justify-between gap-4">
                     <span className="text-sm text-muted-foreground">
-                        Página {products.current_page} de{' '}
-                        {products.last_page} —{' '}
+                        Página {products.current_page} de {products.last_page} —{" "}
                         {products.total} registros
                     </span>
 
@@ -224,6 +207,53 @@ export default function ProductsIndex({
                     </div>
                 </div>
             </div>
-        </AppLayout>
+
+            <Dialog
+                open={productToDelete !== null}
+                onOpenChange={(open) => {
+                    if (!open && !deleting) {
+                        setProductToDelete(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>¿Eliminar artículo?</DialogTitle>
+                        <DialogDescription>
+                            ¿Estas seguro de eliminar el artículo{" "}
+                            <strong><br/>{productToDelete?.name}<br/></strong>
+                            Esta acción no se puede deshacer.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={deleting}
+                            onClick={() => setProductToDelete(null)}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            disabled={deleting}
+                            onClick={confirmDelete}
+                        >
+                            {deleting ? 'Eliminando...' : 'Sí, eliminar'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }
+
+ProductsIndex.layout = {
+    breadcrumbs: [
+        {
+            title: "Products",
+            href: index().url,
+        },
+    ],
+};

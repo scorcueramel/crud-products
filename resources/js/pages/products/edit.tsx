@@ -11,19 +11,8 @@ interface Props {
 }
 
 export default function EditProduct({ product }: Props) {
-    const breadcrumbs = [
-        {
-            title: 'Productos',
-            href: index().url,
-        },
-        {
-            title: 'Editar',
-            href: '#',
-        },
-    ];
-
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <>
             <Head title="Editar producto" />
 
             <div className="p-6">
@@ -33,6 +22,19 @@ export default function EditProduct({ product }: Props) {
 
                 <ProductForm product={product} />
             </div>
-        </AppLayout>
+        </>
     );
 }
+
+EditProduct.layout = {
+    breadcrumbs: [
+        {
+            title: "Products",
+            href: index().url,
+        },
+        {
+            title: "Editar",
+            href: "#",
+        },
+    ],
+};
