@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreUserRequest;
 use App\Http\Requests\UpdateUserRequest;
 use App\Models\User;
-use DB;
-use Hash;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Attributes\Controllers\Authorize;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -17,9 +17,6 @@ use Spatie\Permission\Models\Role;
 
 class UserController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     #[Authorize('viewAny', User::class)]
     public function index(Request $request): Response
     {
@@ -32,7 +29,8 @@ class UserController extends Controller
         return Inertia::render('users/index', [
             'users' => User::query()
                 ->select('id', 'name', 'email', 'email_verified_at', 'created_at')
-                ->with($search !== '', function ($query) use ($search) {
+                ->with('roles:id,name')
+                ->when($search !== '', function ($query) use ($search) {
                     $query->where(function ($query) use ($search) {
                         $query->where('name', 'ilike', "%{$search}%")
                             ->orWhere('email', 'ilike', "%{$search}%");
@@ -43,26 +41,23 @@ class UserController extends Controller
                 ->withQueryString(),
 
             'filters' => [
-                'search' => $search
+                'search' => $search,
             ],
 
             'permissions' => [
                 'create' => $request->user()->can('create', User::class),
                 'update' => $request->user()->can('users.update'),
-                'delete' => $request->user()->can('users.delete')
+                'delete' => $request->user()->can('users.delete'),
             ],
 
             'authUserId' => $request->user()->id,
 
             'flash' => [
-                'success' => $request->session()->get('success')
-            ]
+                'success' => $request->session()->get('success'),
+            ],
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     #[Authorize('create', User::class)]
     public function create(): Response
     {
@@ -70,23 +65,23 @@ class UserController extends Controller
             'roles' => Role::query()
                 ->where('guard_name', 'web')
                 ->orderBy('name')
-                ->get(['id', 'name'])
+                ->get(['id', 'name']),
         ]);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     #[Authorize('create', User::class)]
     public function store(StoreUserRequest $request): RedirectResponse
     {
         $data = $request->validated();
 
-        $roles = $data['admin'];
+        $roles = $data['roles'];
         unset($data['roles']);
 
-        // Solo usuario con rol administrador puede asignar el rol de 'admin'
-        if (in_array('admin', $roles, true) && !$request->user()->hasRole('admin')) {
+        // Solo un administrador puede asignar el rol admin.
+        if (
+            in_array('admin', $roles, true)
+            && ! $request->user()->hasRole('admin')
+        ) {
             abort(403);
         }
 
@@ -94,24 +89,14 @@ class UserController extends Controller
 
         DB::transaction(function () use ($data, $roles): void {
             $user = User::create($data);
+
             $user->syncRoles($roles);
         });
 
         return to_route('users.index')
-            ->with('success', 'Usuario creado correctamente');
+            ->with('success', 'Usuario creado correctamente.');
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(User $user)
-    {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
     #[Authorize('update', 'user')]
     public function edit(User $user): Response
     {
@@ -122,19 +107,19 @@ class UserController extends Controller
                 'email' => $user->email,
                 'roles' => $user->getRoleNames()->all(),
             ],
+
             'roles' => Role::query()
                 ->where('guard_name', 'web')
                 ->orderBy('name')
-                ->get(['id', 'name'])
+                ->get(['id', 'name']),
         ]);
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    #[Authorize('update', 'update')]
-    public function update(UpdateUserRequest $request, User $user): RedirectResponse
-    {
+    #[Authorize('update', 'user')]
+    public function update(
+        UpdateUserRequest $request,
+        User $user
+    ): RedirectResponse {
         $data = $request->validated();
 
         $roles = $data['roles'];
@@ -147,7 +132,7 @@ class UserController extends Controller
         }
 
         DB::transaction(function () use ($request, $user, $data, $roles): void {
-            // Serializa las operaciones que pueden afectar a administradores
+            // Serializa las operaciones que pueden afectar administradores.
             Role::query()
                 ->where('name', 'admin')
                 ->where('guard_name', 'web')
@@ -156,45 +141,63 @@ class UserController extends Controller
 
             $user->refresh();
 
-            if ($user->hasRole('admin') && !$request->user()->hasRole('admin')) {
+            if (
+                $user->hasRole('admin')
+                && ! $request->user()->hasRole('admin')
+            ) {
                 abort(403);
             }
 
-            if (in_array('admin', $roles, true) && !$request->user()->hasRole('admin')) {
+            if (
+                in_array('admin', $roles, true)
+                && ! $request->user()->hasRole('admin')
+            ) {
                 abort(403);
             }
 
-            if ($user->hasRole('admin') && !in_array('admin', $roles, true) && User::role('admin')->count() <= 1) {
-                throw ValidationException::withMessages(['roles' => 'No puedes quitar el rol al último administrador.']);
+            if (
+                $user->hasRole('admin')
+                && ! in_array('admin', $roles, true)
+                && User::role('admin')->count() <= 1
+            ) {
+                throw ValidationException::withMessages([
+                    'roles' => 'No puedes quitar el rol al último administrador.',
+                ]);
             }
 
             $user->update($data);
             $user->syncRoles($roles);
         });
 
-        return to_route('users.index')->with('success', 'Ususario actualizado correctamente');
+        return to_route('users.index')
+            ->with('success', 'Usuario actualizado correctamente.');
     }
 
-    /**
-     * Remove the specified resource from storage.
-     */
     #[Authorize('delete', 'user')]
     public function destroy(User $user): RedirectResponse
     {
-        DB::transaction(function () use ($user):void{
+        DB::transaction(function () use ($user): void {
             Role::query()
-            ->where('name', 'admin')
-            ->where('guard_name', 'web')
-            ->lockForUpdate()
-            ->firstOrFail();
+                ->where('name', 'admin')
+                ->where('guard_name', 'web')
+                ->lockForUpdate()
+                ->firstOrFail();
 
             $user->refresh();
 
-            if($user->hasRole('admi') && User::role('admin')->count() <= 1){
+            if (
+                $user->hasRole('admin')
+                && User::role('admin')->count() <= 1
+            ) {
                 throw ValidationException::withMessages([
-                    'user' => 'Nopuedes eliminar al último administrador'
+                    'user' => 'No puedes eliminar al último administrador.',
                 ]);
             }
+
+            $user->delete();
         });
+
+        return to_route('users.index')
+            ->with('success', 'Usuario eliminado correctamente.');
     }
 }
