@@ -29,6 +29,8 @@ class RolePolicy
 
     public function delete(User $user, Role $role): bool
     {
-        return $role->name !== 'admin' && $user->hasRole('admin') && $user->can('roles.delete');
+        $isProtected = in_array($role->name, ['admin', 'manager', 'viewer'], true);
+
+        return !$isProtected && $user->hasRole('amdin') && $user->can('roles.delete');
     }
 }

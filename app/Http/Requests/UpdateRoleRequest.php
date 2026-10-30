@@ -19,6 +19,7 @@ class UpdateRoleRequest extends FormRequest
     public function rules(): array
     {
         $role = $this->route('role');
+        $isReserved = $role instanceof Role && in_array($role->name, ['manager', 'viewer'], true);
 
         return [
             'name' => [
@@ -29,6 +30,7 @@ class UpdateRoleRequest extends FormRequest
                 Rule::unique('roles', 'name')
                     ->where('guard_name', 'web')
                     ->ignore($role),
+                ...($isReserved ? [Rule::in([$role->name])] : [])
             ],
 
             'permissions' => [

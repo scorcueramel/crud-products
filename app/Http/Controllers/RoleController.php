@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreRoleRequest;
+use App\Http\Requests\UpdateRoleRequest;
 use DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Attributes\Controllers\Authorize;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\Permission\Models\Permission;
@@ -115,16 +117,46 @@ class RoleController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, string $id)
+    #[Authorize('update', 'role')]
+    public function update(UpdateRoleRequest $request, Role $role): RedirectResponse
     {
-        //
+        $data = $request->validated();
+
+        DB::transaction(function () use ($role, $data): void {
+            $role->update([
+                'name' => $data['name'],
+            ]);
+
+            $role->syncPermissions($data['permissions']);
+        });
+
+        return to_route('roles.index')->with('success', 'Rol actualizaco correctamente');
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    #[Authorize('delete', 'role')]
+    public function destroy(Role $role): RedirectResponse
     {
-        //
+        DB::transaction(function () use ($role): void {
+            $table = config('permission.table_names.model_has_roles');
+            $roleKey = config('permission.column_names.role_pivot_key')
+                ?? 'role_id';
+            $assigned = DB::table($table)
+                ->where($roleKey, $role->getKey())
+                ->exists();
+
+            if ($assigned) {
+                throw ValidationException::withMessages([
+                    'role' => 'No puedes eliminar un rol asignado.',
+                ]);
+            }
+
+            $role->delete();
+        });
+
+        return to_route('roles.index')
+            ->with('success', 'Rol eliminado correctamente.');
     }
 }
